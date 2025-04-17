@@ -2,8 +2,10 @@
   "name": "cron-backup-dbs",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
+    "start": "node app.js",
+    "start:dev": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "child_process": "^1.0.2",
+    "cron": "^4.3.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "google-auth-library": "^9.15.1",

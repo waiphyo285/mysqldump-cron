@@ -6,7 +6,9 @@ const cron = require("cron");
 const mysql = require("mysql2");
 const { google } = require("googleapis");
 
-// Parse MYSQL_DATABASES JSON string from .env
+// Setup variables from .env
+const userEmail = process.env.DRIVE_USER_MAIL;
+const backupDir = process.env.DRIVE_BACKUP_DIR;
 const databases = JSON.parse(process.env.MYSQL_DATABASES);
 
 // MySQL connection setup function
@@ -29,7 +31,7 @@ async function backupAllDatabases() {
 async function backupDatabase(database) {
   const timestamp = new Date().toISOString().replace(/[-T:.]/g, "_");
   const backupPath = path.join(__dirname, `${database.name}_${timestamp}.sql`);
-  const command = `mysqldump -u${database.user} -p${database.password} ${database.name} > ${backupPath}`;
+  const command = `sudo mysqldump -u${database.user} -p${database.password} ${database.name} > ${backupPath}`;
 
   // Execute MySQL dump command
   const exec = require("child_process").exec;
@@ -45,35 +47,89 @@ async function backupDatabase(database) {
 
 // Function to upload the backup to Google Drive
 async function uploadToGoogleDrive(filePath, databaseName) {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: "credentials.json",
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
-  });
-
-  const drive = google.drive({ version: "v3", auth });
-
-  const metaData = {
-    name: path.basename(filePath),
-    parents: ["your_folder_id"],
-  };
-
-  const media = {
-    mimeType: "application/sql",
-    body: fs.createReadStream(filePath),
-  };
-
   try {
-    const res = await drive.files.create({
-      resource: metaData,
-      media: media,
-      fields: "id",
+    const auth = new google.auth.GoogleAuth({
+      keyFile: "./credentials.json",
+      scopes: ["https://www.googleapis.com/auth/drive.file"],
     });
+
+    const authClient = await auth.getClient();
+    const drive = google.drive({ version: "v3", auth: authClient });
+
+    const backupDirId = await getOrCreateBackupFolder(drive, backupDir);
+
+    const metaData = {
+      name: path.basename(filePath),
+      parents: [backupDirId],
+    };
+
+    const media = {
+      mimeType: "application/sql",
+      body: fs.createReadStream(filePath),
+    };
+
+    const res = await drive.files.create({
+      fields: "id",
+      media: media,
+      resource: metaData,
+    });
+
     console.info(`Uploaded ${databaseName} backup to Drive:`, res.data.id);
 
     // Clean up: Delete the backup file after uploading
     fs.unlinkSync(filePath);
   } catch (err) {
     console.error(`Error uploading ${databaseName} backup to Drive:`, err);
+  }
+}
+
+// Function to get the destination folder info
+async function getOrCreateBackupFolder(
+  drive,
+  folderName,
+  _userEmail = userEmail
+) {
+  try {
+    const res = await drive.files.list({
+      q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder'`,
+      fields: "files(id)",
+    });
+
+    let folderId;
+
+    if (res.data.files.length > 0) {
+      folderId = res.data.files[0].id;
+      return folderId;
+    }
+
+    const folderMeta = {
+      name: folderName,
+      mimeType: "application/vnd.google-apps.folder",
+    };
+
+    const createRes = await drive.files.create({
+      fields: "id",
+      resource: folderMeta,
+    });
+
+    folderId = createRes.data.id;
+
+    if (_userEmail) {
+      await drive.permissions.create({
+        resource: {
+          type: "user",
+          role: "writer",
+          emailAddress: _userEmail,
+        },
+        fileId: folderId,
+        sendNotificationEmail: false,
+      });
+    }
+
+    return folderId;
+  } catch (error) {
+    console.error("Error in getting folder ID:", error);
+    return null;
   }
 }
 
