@@ -1,0 +1,9 @@
+[
+  {
+    "name": "yourdb",
+    "user": "root",
+    "password": "root",
+    "hostname": "127.0.0.1",
+    "port": "33060"
+  }
+]

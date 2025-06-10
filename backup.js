@@ -5,11 +5,12 @@ const path = require("path");
 const cron = require("cron");
 const mysql = require("mysql2");
 const { google } = require("googleapis");
+const dbConfig = require("./config.json");
 
 // Setup variables from .env
 const userEmail = process.env.DRIVE_USER_MAIL;
 const backupDir = process.env.DRIVE_BACKUP_DIR;
-const databases = JSON.parse(process.env.MYSQL_DATABASES);
+const databases = dbConfig;
 
 // MySQL connection setup function
 function createConnection(database) {
@@ -31,7 +32,7 @@ async function backupAllDatabases() {
 async function backupDatabase(database) {
   const timestamp = new Date().toISOString().replace(/[-T:.]/g, "_");
   const backupPath = path.join(__dirname, `${database.name}_${timestamp}.sql`);
-  const command = `sudo mysqldump -u${database.user} -p${database.password} ${database.name} > ${backupPath}`;
+  const command = `mysqldump -h${database.hostname} --port ${database.port} -u${database.user} -p${database.password} ${database.name} > ${backupPath}`;
 
   // Execute MySQL dump command
   const exec = require("child_process").exec;
@@ -134,7 +135,8 @@ async function getOrCreateBackupFolder(
 }
 
 // Schedule  job (e.g., backup every day at 2:00 AM)
-const job = new cron.CronJob("0 2 * * *", backupAllDatabases);
+const job = new cron.CronJob("*/1 * * * *", backupAllDatabases);
+// const job = new cron.CronJob("0 2 * * *", backupAllDatabases);
 job.start();
 
 module.exports = job;

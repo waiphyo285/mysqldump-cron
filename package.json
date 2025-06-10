@@ -1,5 +1,5 @@
 {
-  "name": "cron-backup-dbs",
+  "name": "mysqldump-cron",
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
